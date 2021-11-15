@@ -43,6 +43,7 @@
 #include "llvm/Transforms/Obfuscation/Flattening.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/Substitution.h"
+#include "llvm/Transforms/Obfuscation/StackStrings.h"
 #include "llvm/CryptoUtils.h"
 
 
@@ -171,6 +172,9 @@ static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
 
 static cl::opt<bool> Split("split", cl::init(false),
                            cl::desc("Enable basic block splitting"));
+
+static cl::opt<bool> StackStrings("ss", cl::init(false),
+                                  cl::desc("Enable stack strings"));
 
 
 
@@ -428,6 +432,7 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createSplitBasicBlock(Split));
   MPM.add(createBogus(BogusControlFlow));
   MPM.add(createFlattening(Flattening));
+  MPM.add(createStackString(StackStrings));
 
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.

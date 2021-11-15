@@ -64,9 +64,11 @@ bool Flattening::flatten(Function *f) {
   llvm::cryptoutils->get_bytes(scrambling_key, 16);
   // END OF SCRAMBLER
 
+  // change from Jabberwock
   // Lower switch
-  FunctionPass *lower = createLowerSwitchPass();
-  lower->runOnFunction(*f);
+  //FunctionPass *lower = createLowerSwitchPass();
+  //lower->runOnFunction(*f);
+  runOnFunction(*f);
 
   // Save all original BB
   for (Function::iterator i = f->begin(); i != f->end(); ++i) {
