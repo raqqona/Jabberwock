@@ -8,15 +8,25 @@ using namespace llvm;
 STATISTIC(StackStringsed, "str value stackstringsed");
 
 namespace {
-struct StackString : public FunctionPass {
+struct StackString : public ModulePass {
   static char ID;
   bool flag;
 
-  StackString() : FunctionPass(ID) {}
-  StackString(bool flag) : FunctionPass(ID) { this->flag = flag; }
+  StackString() : ModulePass(ID) {}
+  StackString(bool flag) : ModulePass(ID) { this->flag = flag; }
 
-  bool runOnFunction(Function &F);
-  bool stackstr(Function *f);
+  bool stackstr(Module &M);
+  void instrument_module(Module &M);
+
+  bool runOnModule(Module &M) override {
+    errs() << "Welcome to stackstrings" << "\n";
+    errs() << "Running stackstring on " << M.getName() << "\n";
+    if (stackstr(M)) {
+      ++StackStringsed;
+    }
+
+    return false;
+  } 
 };
 }
 
@@ -24,25 +34,28 @@ char StackString::ID = 0;
 static RegisterPass<StackString> X("stackstring", "change str value stackstring");
 Pass *llvm::createStackString(bool flag) { return new StackString(flag); }
 
-bool StackString::runOnFunction(Function &F) {
-  Function *tmp = &F;
-  if (toObfuscate(flag, tmp, "ss")) {
-    if (stackstr(tmp)) {
-      ++StackStringsed;
-    }
+
+bool StackString::stackstr(Module &M) {
+  errs() << "StackStrings the module\n";
+  errs() << *M.getGlobalVariable("alice", true) << "\n";
+  llvm::IRBuilder<> Builder(M.getContext());
+  for (auto &F : M) {
+      errs() << "Function: " << F.getName() << "\n";
+      for (auto &I : instructions(F)){
+          if (isa<AllocaInst>(I)) {
+              AllocaInst *alloca_inst = cast<AllocaInst>(&I); 
+              errs() << alloca_inst->getName() << ":";
+              StringRef var_name = F.getName().str() + "." + alloca_inst->getName().str();
+              errs() << var_name << "\n";
+              auto g_val = M.getGlobalVariable(var_name, true);
+              if(g_val != nullptr){
+                errs() << *g_val << "\n";
+              }else{
+                errs() << "not strings" << "\n";
+              }
+          }
+      }
   }
-
-  return false;
-}
-
-bool StackString::stackstr(Function *f) {
-  errs() << "StackStrings: ";
-  errs().write_escaped(f->getName()) << '\n';
-
-  DEBUG_WITH_TYPE("opt", errs() << "ss: Started on function " << f->getName() << "\n");
-
-
-  fixStack(f);
-
+  errs() << "Finished StackStrings the module\n";
   return true;
 }
