@@ -111,29 +111,46 @@ Pass *llvm::createStackString(bool flag) { return new StackString(flag); }
 
 bool StackString::stackstr(Module &M) {
   IRBuilder<> Builder(M.getContext());
+  std::vector<GlobalVariable*> erase_gVar_list;
+  std::vector<Instruction*> erase_inst_list;
   for (auto &F : M) {
     for (auto &I : instructions(F)){
       if (isa<AllocaInst>(I)) {
         AllocaInst *alloca_inst = cast<AllocaInst>(&I); 
         StringRef var_name = F.getName().str() + "." + alloca_inst->getName().str();
         auto g_val = M.getGlobalVariable(var_name, true);
-        if(g_val != nullptr){
-          auto value_val = g_val->getOperand(0);
-          const ConstantDataArray *data = dyn_cast<ConstantDataArray>(value_val);
-          StringRef str_val = data->getAsString();
-          errs() << "we got: " << str_val << "\n";
+        if(g_val != nullptr){ //detected global strings
+          erase_gVar_list.push_back(g_val);
+          auto value_var = g_val->getOperand(0);
+          const ConstantDataArray *data = dyn_cast<ConstantDataArray>(value_var);
           Builder.SetInsertPoint(I.getNextNode());
-          for(auto id = 0; id < data->getNumElements(); ++id){
+          for(auto id = 0; id < data->getNumElements(); ++id){ //insert ss instruction
             auto *dest_address = Builder.CreateInBoundsGEP(alloca_inst->getAllocatedType(), alloca_inst, {Builder.getInt32(0), Builder.getInt32(id)}, "arrayidx");
             Value *load_elem = data->getElementAsConstant(id);
-            //auto *a = Builder.CreateAlloca(Type::getInt32Ty(M.getContext()), nullptr, "a");
-            //Builder.CreateStore(Builder.getInt32(data->getElementAsInteger(id)), a);
-            //Builder.CreateStore(Builder.getInt32(data->getElementAsInteger(id)), dest_address);
             Builder.CreateStore(load_elem, dest_address);
           }
         }
       }
     }
+    //detected memcpy call isntruction
+    for (auto &I : instructions(F)){
+      if (isa<CallInst>(I)){
+        Function *tmp_func = cast<CallInst>(&I)->getCalledFunction();
+        if(tmp_func->getName() == "llvm.memcpy.p0i8.p0i8.i64"){
+          erase_inst_list.push_back(&I);
+        }
+      }
+    }
+  }
+  //delete memcpy call isntruction
+  for(size_t idx = 0; idx < erase_inst_list.size(); idx++){
+    Instruction *rm_inst = erase_inst_list[idx];
+    rm_inst->eraseFromParent();
+  }
+  //delete global strings
+  for(int idx = 0; idx < erase_gVar_list.size(); idx++){
+    auto *tmp_var = erase_gVar_list[idx];
+    tmp_var->eraseFromParent();
   }
   return true;
 }
